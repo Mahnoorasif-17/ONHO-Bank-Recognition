@@ -586,10 +586,3 @@ def run_reconciliation(batch_file, rta_file):
     return output_file
 
 
-# Example runner (optional) ---------------------------------------------------
-if __name__ == "__main__":
-    # replace these with your actual paths or call run_reconciliation from another script
-    batch_path = r"C:\Users\ADMIN\Documents\ONHO\Batch Aug.xlsx"
-    rta_path = r"C:\Users\ADMIN\Documents\ONHO\RTA.xlsx"
-    out = run_reconciliation(batch_path, rta_path)
-    print("Saved:", out)
