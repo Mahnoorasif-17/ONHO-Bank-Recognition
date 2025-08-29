@@ -57,12 +57,11 @@ def pick_col(df, candidates):
 # =========================
 # Main function
 # =========================
-def run_reconciliation(batch_file, rta_file, output_file=None):
-    # =========================
-    # Load files
-    # =========================
-    batch_df = pd.read_excel(batch_file)
-    rta_df   = pd.read_excel(rta_file)
+def run_reconciliation(batch_file, rta_file):
+    batch_df = pd.read_excel(batch_file)  # directly use uploaded file object
+    rta_df = pd.read_excel(rta_file)
+
+
 
     # =========================
     # Clean headers & values
