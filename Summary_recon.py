@@ -57,9 +57,16 @@ def pick_col(df, candidates):
 # =========================
 # Main function
 # =========================
-def run_reconciliation(batch_file, rta_file):
-    batch_df = pd.read_excel(batch_file)  # directly use uploaded file object
-    rta_df = pd.read_excel(rta_file)
+def run_reconciliation(batch_input, rta_input):
+    def load_excel(src):
+        # If it's a path string and exists
+        if isinstance(src, str) and os.path.exists(src):
+            return pd.read_excel(src)
+        # Otherwise assume it's a file-like object from Streamlit
+        return pd.read_excel(src)
+
+    batch_df = load_excel(batch_input)
+    rta_df = load_excel(rta_input)
 
 
 
