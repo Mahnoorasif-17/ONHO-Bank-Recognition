@@ -12,6 +12,6 @@ if st.button("Run Reconciliation"):
         st.success("Reconciliation complete!")
 
         with open(output_file, "rb") as f:
-            st.download_button("Download Reconciliation Report", f, file_name=output_file)
+            st.download_button("Download Excel", f, file_name="Reconciliation_Output.xlsx")
     else:
-        st.error("Please upload both files.")
+        st.warning("Please upload both files.")
