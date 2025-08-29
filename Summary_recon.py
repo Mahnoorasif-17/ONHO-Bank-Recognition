@@ -586,8 +586,9 @@ def run_reconciliation(batch_input, rta_input):
 
     autofit_columns(ws)
 
-    if output_file is None:
-        output_file = f"Bank_Recon_Combined_{target_date}.xlsx"
+    # if output_file is None:
+    #     output_file = f"Bank_Recon_Combined_{target_date}.xlsx"
+    output_file = f"Bank_Recon_Combined_{target_date}.xlsx"
     wb.save(output_file)
 
     return output_file
