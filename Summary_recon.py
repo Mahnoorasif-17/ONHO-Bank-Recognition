@@ -98,6 +98,10 @@ def run_reconciliation(batch_input, rta_input):
     # =========================
     # Dates
     # =========================
+    # Robust Batch datetime column
+batch_date_col = pick_col(batch_df, ["Batch Date", "Date", "Transaction Date", "Batch_Date"])
+if batch_date_col is None:
+    raise ValueError(f"Could not find a Date column in Batch file. Columns: {list(batch_df.columns)}")
     batch_df["Batch Date"] = pd.to_datetime(batch_df["Batch Date"], errors="coerce")
     batch_df = batch_df.dropna(subset=["Batch Date"])
 
