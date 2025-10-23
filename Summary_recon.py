@@ -460,7 +460,8 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     blank_rta_diff = rta_unmatched[(rta_unmatched["Matching"] == "") & (rta_unmatched["Comments"] == "")]
     for _, row_data in blank_rta_diff.iterrows():
         ws.cell(row=r, column=7).value = row_data["Date/Time"]
-        ws.cell(row=r, column=8).value = row_data["Card brand"].capitalize()
+        # ws.cell(row=r, column=8).value = row_data["Card brand"].capitalize()
+        ws.cell(row=r, column=8).value = str(row_data.get("Card brand", "")).capitalize()
         ws.cell(row=r, column=9).value = row_data["Card number"]
         write_currency(ws, r, 10, row_data["Amount"]); r += 1
 
