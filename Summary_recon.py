@@ -261,7 +261,7 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     cand_datetime = ["Date/Time", "Date Time", "Datetime", "Date", "__DateTime"]
     cand_tender 	= ["Tender", "Card / Tender", "Card/Tender", "Card Tender", "Card brand", "Card"]
     cand_customer = ["Customer", "Customer Name", "Name", "Card number", "Account"]
-    cand_regid 	= ["RegID", "Register ID", "RegisterID"]
+    cand_regid 	= ["RegID", "Register ID", "RegisterID","Reg_ID"]
     cand_total 	= ["Total", "Amount", "Total Amount", "Grand Total", "Amt"]
 
     c_dt = pick_col(unmatched_rta, cand_datetime)
