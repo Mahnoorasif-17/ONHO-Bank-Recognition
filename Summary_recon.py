@@ -62,16 +62,16 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     # Load files
     # =========================
     batch_df = pd.read_excel(batch_file)
-    rta_df 	 = pd.read_excel(rta_file)
+    rta_df   = pd.read_excel(rta_file)
 
     # =========================
     # Clean headers & values
     # =========================
     batch_df.columns = clean_headers(batch_df.columns)
-    rta_df.columns 	 = clean_headers(rta_df.columns)
+    rta_df.columns   = clean_headers(rta_df.columns)
 
     batch_df = clean_object_columns(batch_df)
-    rta_df 	 = clean_object_columns(rta_df)
+    rta_df   = clean_object_columns(rta_df)
 
     # =========================
     # Parse numeric amounts (BATCH made robust like RTA)
@@ -93,7 +93,6 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
         rta_df[total_col].replace(r"[\$,]", "", regex=True), errors="coerce"
     ).round(2)
     
-
 
     # =========================
     # Dates (BATCH made robust like RTA)
@@ -187,7 +186,7 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     # Summaries (added split/check/account into modes)
     # =========================
     batch_modes = ["american express", "mastercard", "visa", "discover", "other", "split", "check", "account"]
-    all_modes 	= batch_modes + ["cash"]
+    all_modes   = batch_modes + ["cash"]
 
     batch_summary = (
         batch_df.groupby("Card brand", dropna=False)["Amount"].sum()
@@ -201,14 +200,14 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
 
     merged = pd.DataFrame(index=all_modes)
     merged["Amount_Bank"] = batch_summary.reindex(all_modes, fill_value=0)
-    merged["Amount_RTA"] 	= rta_summary
-    merged["Diff"] 			= merged["Amount_Bank"] - merged["Amount_RTA"]
+    merged["Amount_RTA"]  = rta_summary
+    merged["Diff"]        = merged["Amount_Bank"] - merged["Amount_RTA"]
 
     diff_exc_cash = merged.drop("cash").Diff.sum()
-    cash_diff 	 = -merged.loc["cash", "Amount_RTA"] if "cash" in merged.index else 0.0
-    total_diff 	 = diff_exc_cash + cash_diff
-    batch_total 	 = merged.loc[batch_modes, "Amount_Bank"].sum()
-    rta_total 	 = merged.loc[all_modes, "Amount_RTA"].sum()
+    cash_diff     = -merged.loc["cash", "Amount_RTA"] if "cash" in merged.index else 0.0
+    total_diff    = diff_exc_cash + cash_diff
+    batch_total   = merged.loc[batch_modes, "Amount_Bank"].sum()
+    rta_total     = merged.loc[all_modes, "Amount_RTA"].sum()
 
     # --- Diagnostics ---
     print(f"Batch rows: {len(batch_df)}, date range: {batch_min}..{batch_max}")
@@ -220,12 +219,21 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     # =========================
     # Matching for unmatched tables
     # =========================
+    # --- Initial Matching (to determine 'Matched' flag based on Rule 1: Date, Tender, Amount) ---
+    
+    # BATCH to RTA matching
     rta_copy = rta_df.copy()
     matched_flags_batch = []
-    for _, batch_row in batch_df.iterrows():
+    for index, batch_row in batch_df.iterrows():
         b_amount = batch_row["Amount"]
-        b_brand 	= batch_row["Card brand"]
-        match = rta_copy[(rta_copy["Total"] == b_amount) & (rta_copy["Tender"] == b_brand)]
+        b_brand  = batch_row["Card brand"]
+        b_date   = batch_row["Batch Date"].date() # Get date object for batch
+        
+        # Rule 1 Implementation: Match Date, Amount and Tender/Card brand
+        match = rta_copy[(rta_copy["Total"] == b_amount) & 
+                         (rta_copy["Tender"] == b_brand) &
+                         (rta_copy["Date"] == b_date)] 
+
         if not match.empty:
             rta_copy = rta_copy.drop(index=match.index[0])
             matched_flags_batch.append(True)
@@ -243,12 +251,19 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
         "Amount": unmatched_batch["Amount"],
     })
 
+    # RTA to BATCH matching
     batch_copy = batch_df.copy()
     matched_flags_rta = []
-    for _, rta_row in rta_df.iterrows():
+    for index, rta_row in rta_df.iterrows():
         r_amount = rta_row["Total"]
         r_tender = rta_row["Tender"]
-        match = batch_copy[(batch_copy["Amount"] == r_amount) & (batch_copy["Card brand"] == r_tender)]
+        r_date   = rta_row["Date"] # RTA 'Date' is already date object
+
+        # Rule 1 Implementation: Match Date, Amount and Tender/Card brand
+        match = batch_copy[(batch_copy["Amount"] == r_amount) & 
+                           (batch_copy["Card brand"] == r_tender) &
+                           (batch_copy["Batch Date"].dt.date == r_date)] 
+
         if not match.empty:
             batch_copy = batch_copy.drop(index=match.index[0])
             matched_flags_rta.append(True)
@@ -257,18 +272,18 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     rta_df["Matched"] = matched_flags_rta
     unmatched_rta = rta_df[~rta_df["Matched"]].copy()
 
-    # ---------- Robust TABLE2 build (no KeyErrors, no scalar-init) ----------
+    # ---------- Robust TABLE2 build (for RTA unmatched - now includes RegID) ----------
     cand_datetime = ["Date/Time", "Date Time", "Datetime", "Date", "__DateTime"]
-    cand_tender 	= ["Tender", "Card / Tender", "Card/Tender", "Card Tender", "Card brand", "Card"]
+    cand_tender   = ["Tender", "Card / Tender", "Card/Tender", "Card Tender", "Card brand", "Card"]
     cand_customer = ["Customer", "Customer Name", "Name", "Card number", "Account"]
-    cand_regid 	= ["RegID", "Register ID", "RegisterID","Reg_ID"]
-    cand_total 	= ["Total", "Amount", "Total Amount", "Grand Total", "Amt"]
+    cand_total    = ["Total", "Amount", "Total Amount", "Grand Total", "Amt"]
+    cand_regid    = ["RegID", "Reg ID", "ID"] 
 
     c_dt = pick_col(unmatched_rta, cand_datetime)
     c_td = pick_col(unmatched_rta, cand_tender)
     c_cu = pick_col(unmatched_rta, cand_customer)
-    c_ri = pick_col(unmatched_rta, cand_regid)
     c_to = pick_col(unmatched_rta, cand_total)
+    c_ri = pick_col(unmatched_rta, cand_regid) 
 
     n = len(unmatched_rta)
     table2_cols = {}
@@ -278,8 +293,8 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
         table2_cols["Date/Time"] = unmatched_rta[c_dt]
     else:
         table2_cols["Date/Time"] = pd.Series([pd.NaT] * n)
-        
-    # NEW: RegID (added first so it appears right after Date/Time when reordered)
+
+    # RegID
     if c_ri:
         table2_cols["RegID"] = unmatched_rta[c_ri]
     else:
@@ -296,7 +311,7 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
         table2_cols["Card number"] = unmatched_rta[c_cu]
     else:
         table2_cols["Card number"] = pd.Series([""] * n)
-        
+
     # Amount
     if c_to:
         amt = unmatched_rta[c_to]
@@ -305,32 +320,24 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
         table2_cols["Amount"] = pd.to_numeric(amt, errors="coerce").round(2)
     else:
         table2_cols["Amount"] = pd.Series([0.0] * n)
-
-    table2 = pd.DataFrame(table2_cols)
+    
+    # Explicitly set the column order
+    table2_columns_order = ["Date/Time", "RegID", "Card brand", "Card number", "Amount"]
+    table2 = pd.DataFrame(table2_cols)[table2_columns_order]
     # -----------------------------------------------------
 
-    # Matching + comments
+    # --- Secondary Matching (for unmatched transactions: Rule 1 & Rule 2) ---
     batch_unmatched = table1.copy().reset_index(drop=True)
+    rta_unmatched   = table2.copy().reset_index(drop=True)
     
-    # 🌟 LOGIC CHANGE: Reorder table2 to match the desired output sequence
-    # Original table2 creation order: Date/Time, RegID, Card brand, Card number, Amount
-    column_order_rta = ["Date/Time", "RegID", "Card brand", "Card number", "Amount"]
-    
-    # Ensure all required columns are present before reordering (safety check)
-    missing_cols = [c for c in column_order_rta if c not in table2.columns]
-    if missing_cols:
-        # This should not happen with the logic above, but is a good safeguard
-        print(f"Warning: Missing columns {missing_cols} for RTA unmatched table output.")
+    # Add Date columns for easy comparison in the loop
+    batch_unmatched["Date"] = batch_unmatched["Batch Date"].dt.date
+    rta_unmatched["Date"] = pd.to_datetime(rta_unmatched["Date/Time"], errors='coerce').dt.date 
 
-    # Reorder the columns now
-    table2 = table2[column_order_rta]
-    
-    rta_unmatched 	= table2.copy().reset_index(drop=True)
-    
     batch_unmatched["Matching"] = ""
     batch_unmatched["Comments"] = ""
-    rta_unmatched["Matching"] 	= ""
-    rta_unmatched["Comments"] 	= ""
+    rta_unmatched["Matching"]   = ""
+    rta_unmatched["Comments"]   = ""
 
     match_id = 1
     used_rta = set()
@@ -339,16 +346,30 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     for i, b_row in batch_unmatched.iterrows():
         b_amt = b_row["Amount"]
         b_brand = b_row["Card brand"]
-        possible = rta_unmatched[(~rta_unmatched.index.isin(used_rta)) & (rta_unmatched["Amount"] == b_amt)]
-        exact = possible[possible["Card brand"] == b_brand]
-        if not exact.empty:
-            r_idx = exact.index[0]
+        b_date = b_row["Date"] 
+        
+        # Rule 2: Find candidates matching on Amount and Date (Brand can differ)
+        candidates = rta_unmatched[
+            (~rta_unmatched.index.isin(used_rta)) & 
+            (rta_unmatched["Amount"] == b_amt) &
+            (rta_unmatched["Date"] == b_date)
+        ]
+        
+        # --- Rule 1: Same Date, Tender (Card Brand), AND Amount (Priority Match on unmatched pool) ---
+        exact_match = candidates[candidates["Card brand"] == b_brand]
+        
+        if not exact_match.empty:
+            r_idx = exact_match.index[0]
             batch_unmatched.at[i, "Matching"] = match_id
             rta_unmatched.at[r_idx, "Matching"] = match_id
             match_id += 1
             used_rta.add(r_idx)
             continue
-        card_match = possible[possible["Card brand"].isin(["visa", "mastercard", "american express", "discover", "split", "check", "account"])]
+            
+        # --- Continue with existing categorization logic on candidates (Rule 2 covers Date+Amount match) ---
+
+        # 2. Categorization difference match (Batch brand is 'other', RTA brand is card)
+        card_match = candidates[candidates["Card brand"].isin(["visa", "mastercard", "american express", "discover", "split", "check", "account"])]
         if not card_match.empty and b_brand == "other":
             r_idx = card_match.index[0]
             r_brand = rta_unmatched.at[r_idx, "Card brand"]
@@ -359,7 +380,9 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
             match_id += 1
             used_rta.add(r_idx)
             continue
-        fallback = possible.sort_values(by="Card brand", key=lambda x: x.map(lambda val: priority.index(val) if val in priority else 999))
+            
+        # 3. Fallback match (Date and Amount match, but brands are different/weird)
+        fallback = candidates.sort_values(by="Card brand", key=lambda x: x.map(lambda val: priority.index(val) if val in priority else 999))
         if not fallback.empty:
             r_idx = fallback.index[0]
             r_brand = rta_unmatched.at[r_idx, "Card brand"]
@@ -369,6 +392,11 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
             batch_unmatched.at[i, "Comments"] = f"Matched with {r_brand.capitalize()} in RTA"
             match_id += 1
             used_rta.add(r_idx)
+
+    # Remove the temporary 'Date' column before writing to Excel
+    batch_unmatched = batch_unmatched.drop(columns=["Date"])
+    rta_unmatched = rta_unmatched.drop(columns=["Date"])
+
 
     # =========================
     # Excel output
@@ -434,9 +462,9 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     # Detailed recon (col G..)
     r = 1
     ws.cell(row=r, column=7).value = "Detailed Recon"; ws.cell(row=r, column=7).font = bold; r += 2
-    ws.cell(row=r, column=7).value = "1881"; 			write_currency(ws, r, 8, round(batch_total, 2)); r += 1
-    ws.cell(row=r, column=7).value = "RTA"; 				write_currency(ws, r, 8, rta_total); 					r += 1
-    ws.cell(row=r, column=7).value = "Diff"; 			write_currency(ws, r, 8, total_diff); write_currency(ws, r, 9, 0.00); r += 2
+    ws.cell(row=r, column=7).value = "1881";          write_currency(ws, r, 8, round(batch_total, 2)); r += 1
+    ws.cell(row=r, column=7).value = "RTA";           write_currency(ws, r, 8, rta_total);              r += 1
+    ws.cell(row=r, column=7).value = "Diff";          write_currency(ws, r, 8, total_diff); write_currency(ws, r, 9, 0.00); r += 2
     ws.cell(row=r, column=7).value = "1881"; ws.cell(row=r, column=7).font = bold; r += 1
     for mode in batch_modes:
         ws.cell(row=r, column=7).value = mode.capitalize()
@@ -456,8 +484,7 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
 
     r += 1
     ws.cell(row=r, column=7).value = "Transactions in RTA not in 1881"; ws.cell(row=r, column=7).font = bold; r += 1
-    
-    # 🌟 LOGIC CHANGE 1: Updated headers_2 to move RegID after Date/Time
+    # MODIFIED HEADERS_2 TO INCLUDE RegID
     headers_2 = ["Date/Time", "RegID", "Card brand", "Card number", "Amount", "Matching", "Comments"]
     for col_idx, header in enumerate(headers_2, start=7):
         ws.cell(row=r, column=col_idx).value = header; ws.cell(row=r, column=col_idx).font = bold
@@ -465,7 +492,7 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     for _, row_data in rta_unmatched.iterrows():
         for col_idx, val in enumerate(row_data, start=7):
             ws.cell(row=r, column=col_idx).value = val
-        # The Amount column is now at index 4 of the DataFrame, which is column 11 (7 + 4) in the Excel sheet.
+        # CHANGED COLUMN INDEX FOR AMOUNT FROM 10 TO 11
         write_currency(ws, r, 11, ws.cell(row=r, column=11).value); r += 1
 
     # Difference section
@@ -489,8 +516,7 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     for _, row_data in blank_rta_diff.iterrows():
         ws.cell(row=r, column=7).value = row_data["Date/Time"]
         ws.cell(row=r, column=8).value = row_data["Card brand"].capitalize()
-        # NOTE: Skipping RegID and Card number columns to match the 4-column format of the Difference table
-        ws.cell(row=r, column=9).value = row_data["Card number"] # Card number is at index 3 in current row_data, this is OK as we only need 4 columns
+        ws.cell(row=r, column=9).value = row_data["Card number"]
         write_currency(ws, r, 10, row_data["Amount"]); r += 1
 
     # -----------------------------
@@ -516,8 +542,8 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
         rowp += 1
 
     # Cash row after batch_modes
-    batch_cash = batch_df[batch_df["Card brand"].str.lower() == "cash"]["Amount"].sum()
-    rta_cash 	= rta_df[rta_df["Tender"].str.lower() == "cash"]["Total"].sum()
+    batch_cash = batch_df[batch_df["Card brand"].astype(str).str.lower() == "cash"]["Amount"].sum()
+    rta_cash   = rta_df[rta_df["Tender"].astype(str).str.lower() == "cash"]["Total"].sum()
     cash_value = batch_cash - rta_cash
     ws.cell(row=rowp, column=7).value = "Cash"
     c = write_currency(ws, rowp, 8, cash_value)
@@ -569,7 +595,7 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
 
     # Append logic-generated 0.00 beside Diff Final total like your original logic
     blank_batch_diff = batch_unmatched[(batch_unmatched["Matching"] == "") & (batch_unmatched["Comments"] == "")]
-    blank_rta_diff 	 = rta_unmatched[(rta_unmatched["Matching"] == "") & (rta_unmatched["Comments"] == "")]
+    blank_rta_diff   = rta_unmatched[(rta_unmatched["Matching"] == "") & (rta_unmatched["Comments"] == "")]
     batch_diff_sum = blank_batch_diff["Amount"].sum()
     rta_diff_sum = blank_rta_diff["Amount"].sum()
     logic_zero_result = diff_final_total - batch_diff_sum + rta_diff_sum
@@ -597,8 +623,8 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     ws.cell(row=r, column=7).font = bold; ws.cell(row=r, column=8).font = bold
 
     unmatched_batch_total = blank_batch_diff["Amount"].sum()
-    unmatched_rta_total 	= blank_rta_diff["Amount"].sum()
-    final_logic_value 	= batch_total - unmatched_batch_total + unmatched_rta_total
+    unmatched_rta_total   = blank_rta_diff["Amount"].sum()
+    final_logic_value     = batch_total - unmatched_batch_total + unmatched_rta_total
     write_currency(ws, r, 9, final_logic_value); ws.cell(row=r, column=9).font = bold
     diff_total = round(rta_total - final_logic_value, 2)
     write_currency(ws, r, 10, diff_total); ws.cell(row=r, column=10).font = bold
@@ -607,7 +633,7 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     autofit_columns(ws)
 
     if output_file is None:
-        output_file = f"pakkalastBBank_Recon_Combined_{target_date}.xlsx"
+        output_file = f"Final_Bank_Recon_Combined_{target_date}.xlsx"
     wb.save(output_file)
 
     return output_file
