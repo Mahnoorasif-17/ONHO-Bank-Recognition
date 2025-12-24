@@ -224,12 +224,6 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     # BATCH to RTA matching
     rta_copy = rta_df.copy()
     matched_flags_batch = []
-    
-    # NEW logic: List to capture exact matches for the 2nd tab
-    exact_matches_for_tab2 = []
-    rta_regid_col_orig = pick_col(rta_df, ["RegID", "Reg ID", "ID"])
-    batch_cardnum_col_orig = pick_col(batch_df, ["Card number", "Customer", "Customer Name", "Name", "Account", "Masked Card", "Last 4", "Last4"])
-
     for index, batch_row in batch_df.iterrows():
         b_amount = batch_row["Amount"]
         b_brand  = batch_row["Card brand"]
@@ -241,17 +235,6 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
                          (rta_copy["Date"] == b_date)] 
 
         if not match.empty:
-            match_row = match.iloc[0]
-            # Save for Tab 2
-            exact_matches_for_tab2.append({
-                "Batch Date": batch_row["Batch Date"],
-                "Card brand": b_brand.capitalize(),
-                "Card number": batch_row[batch_cardnum_col_orig] if batch_cardnum_col_orig else "",
-                "Amount": b_amount,
-                "RTA RegID": match_row[rta_regid_col_orig] if rta_regid_col_orig else "",
-                "RTA Date/Time": match_row["__DateTime"]
-            })
-            
             rta_copy = rta_copy.drop(index=match.index[0])
             matched_flags_batch.append(True)
         else:
@@ -479,9 +462,9 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     # Detailed recon (col G..)
     r = 1
     ws.cell(row=r, column=7).value = "Detailed Recon"; ws.cell(row=r, column=7).font = bold; r += 2
-    ws.cell(row=r, column=7).value = "1881";           write_currency(ws, r, 8, round(batch_total, 2)); r += 1
-    ws.cell(row=r, column=7).value = "RTA";            write_currency(ws, r, 8, rta_total);               r += 1
-    ws.cell(row=r, column=7).value = "Diff";           write_currency(ws, r, 8, total_diff); write_currency(ws, r, 9, 0.00); r += 2
+    ws.cell(row=r, column=7).value = "1881";          write_currency(ws, r, 8, round(batch_total, 2)); r += 1
+    ws.cell(row=r, column=7).value = "RTA";           write_currency(ws, r, 8, rta_total);              r += 1
+    ws.cell(row=r, column=7).value = "Diff";          write_currency(ws, r, 8, total_diff); write_currency(ws, r, 9, 0.00); r += 2
     ws.cell(row=r, column=7).value = "1881"; ws.cell(row=r, column=7).font = bold; r += 1
     for mode in batch_modes:
         ws.cell(row=r, column=7).value = mode.capitalize()
@@ -646,40 +629,11 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     diff_total = round(rta_total - final_logic_value, 2)
     write_currency(ws, r, 10, diff_total); ws.cell(row=r, column=10).font = bold
     r += 1
-    autofit_columns(ws)
 
-    # =========================
-    # NEW TAB: Matched Transactions Section
-    # =========================
-    ws2 = wb.create_sheet("Matched Transactions")
-    headers_tab2 = ["Batch Date", "Card brand", "Card number", "Amount", "RTA RegID", "RTA Date/Time"]
-    for col_idx, header in enumerate(headers_tab2, start=1):
-        ws2.cell(row=1, column=col_idx).value = header
-        ws2.cell(row=1, column=col_idx).font = bold
-        ws2.cell(row=1, column=col_idx).fill = blue_fill
-    
-    r2 = 2
-    for item in exact_matches_for_tab2:
-        ws2.cell(row=r2, column=1).value = item["Batch Date"]
-        ws2.cell(row=r2, column=2).value = item["Card brand"]
-        ws2.cell(row=r2, column=3).value = item["Card number"]
-        write_currency(ws2, r2, 4, item["Amount"])
-        ws2.cell(row=r2, column=5).value = item["RTA RegID"]
-        ws2.cell(row=r2, column=6).value = item["RTA Date/Time"]
-        r2 += 1
-    
-    autofit_columns(ws2)
+    autofit_columns(ws)
 
     if output_file is None:
         output_file = f"Final_Bank_Recon_Combined_{target_date}.xlsx"
     wb.save(output_file)
 
     return output_file
-
-# Example runner (optional) ---------------------------------------------------
-if __name__ == "__main__":
-    # replace these with your actual paths or call run_reconciliation from another script
-    batch_path = r"C:\Users\ADMIN\Documents\ONHO\Batch Aug.xlsx"
-    rta_path = r"C:\Users\ADMIN\Documents\ONHO\RTA.xlsx"
-    out = run_reconciliation(batch_path, rta_path)
-    print("Saved:", out)
