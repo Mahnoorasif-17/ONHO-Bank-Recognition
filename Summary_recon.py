@@ -8,10 +8,8 @@ from openpyxl.utils import get_column_letter
 # Helpers
 # =========================
 def clean_headers(cols):
-    # 1. Convert to string
-    # 2. Remove non-breaking spaces (\u00a0)
-    # 3. Strip ALL leading/trailing whitespace
-    return cols.astype(str).str.replace("\u00a0", "", regex=False).str.strip()
+    # strip and remove non-breaking spaces
+    return cols.str.replace("\u00a0", "", regex=False).str.strip()
 
 
 def clean_object_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -23,10 +21,6 @@ def clean_object_columns(df: pd.DataFrame) -> pd.DataFrame:
                 .str.replace("\u00a0", "", regex=False)
                 .str.strip()
             )
-            # Extra safety: if the column is 'Total' or 'Amount', 
-            # make sure it doesn't have hidden spaces inside the numbers
-            if any(x in c for x in ["Total", "Amount", "Amt"]):
-                 df[c] = df[c].str.replace(" ", "", regex=False)
     return df
 
 def write_currency(ws, row, col, value):
@@ -530,7 +524,8 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     blank_batch_diff = batch_unmatched[(batch_unmatched["Matching"] == "") & (batch_unmatched["Comments"] == "")]
     for _, row_data in blank_batch_diff.iterrows():
         ws.cell(row=r, column=7).value = row_data["Batch Date"]
-        ws.cell(row=r, column=8).value = row_data["Card brand"].capitalize()
+        brand_val = str(row_data["Card brand"]).capitalize() if pd.notna(row_data["Card brand"]) else ""
+        ws.cell(row=r, column=8).value = brand_val
         ws.cell(row=r, column=9).value = row_data["Card number"]
         write_currency(ws, r, 10, row_data["Amount"]); r += 1
 
@@ -538,7 +533,8 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     blank_rta_diff = rta_unmatched[(rta_unmatched["Matching"] == "") & (rta_unmatched["Comments"] == "")]
     for _, row_data in blank_rta_diff.iterrows():
         ws.cell(row=r, column=7).value = row_data["Date/Time"]
-        ws.cell(row=r, column=8).value = row_data["Card brand"].capitalize()
+        brand_val = str(row_data["Card brand"]).capitalize() if pd.notna(row_data["Card brand"]) else ""
+        ws.cell(row=r, column=8).value = brand_val
         ws.cell(row=r, column=9).value = row_data["Card number"]
         write_currency(ws, r, 10, row_data["Amount"]); r += 1
 
