@@ -353,10 +353,10 @@ def run_reconciliation(batch_file, rta_file, output_file=None):
     batch_unmatched["Date"] = batch_unmatched["Batch Date"].dt.date
     rta_unmatched["Date"] = pd.to_datetime(rta_unmatched["Date/Time"], errors='coerce').dt.date 
 
-    batch_unmatched["Matching"] = ""
-    batch_unmatched["Comments"] = ""
-    rta_unmatched["Matching"]   = ""
-    rta_unmatched["Comments"]   = ""
+    batch_unmatched["Matching"] = pd.Series([""] * len(batch_unmatched), dtype=object)
+    batch_unmatched["Comments"] = pd.Series([""] * len(batch_unmatched), dtype=object)
+    rta_unmatched["Matching"]   = pd.Series([""] * len(rta_unmatched), dtype=object)
+    rta_unmatched["Comments"]   = pd.Series([""] * len(rta_unmatched), dtype=object)
 
     match_id = 1
     used_rta = set()
